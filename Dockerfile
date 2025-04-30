@@ -1,35 +1,24 @@
+# Build stage
 FROM eclipse-temurin:24-jdk-alpine as build
 WORKDIR /workspace/app
 
-# Copy maven executable
-COPY mvnw .
-COPY .mvn .mvn
-
-# Copy the pom.xml file
+# Copy the project files
 COPY pom.xml .
+COPY src ./src
 
-# Build dependencies
-RUN ./mvnw dependency:go-offline -B
-
-# Copy the project source
-COPY src src
-
-# Package the application
-RUN ./mvnw package -DskipTests
-RUN mkdir -p target/dependency && (cd target/dependency; jar -xf ../*.jar)
+# Build the application
+RUN apk add --no-cache maven
+RUN mvn clean package -DskipTests
 
 # Run stage
 FROM eclipse-temurin:24-jre-alpine
 VOLUME /tmp
 
-# Copy dependency to the docker image
-ARG DEPENDENCY=/workspace/app/target/dependency
-COPY --from=build ${DEPENDENCY}/BOOT-INF/lib /app/lib
-COPY --from=build ${DEPENDENCY}/META-INF /app/META-INF
-COPY --from=build ${DEPENDENCY}/BOOT-INF/classes /app
+# Copy the jar file
+COPY --from=build /workspace/app/target/*.jar app.jar
 
-# Set the entry point for the application
-ENTRYPOINT ["java","-cp","app:app/lib/*","com.hadi.taskmanagement.TaskManagementSystemApplication"]
+# Set the entry point
+ENTRYPOINT ["java", "-jar", "/app.jar"]
 
 # Create the uploads directory
 RUN mkdir -p /app/uploads
